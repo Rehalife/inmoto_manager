@@ -25,6 +25,8 @@ list(APPEND CMAKE_PREFIX_PATH /opt/ros/${ROS_DISTRO})
 
 find_package(rclcpp REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(std_msgs REQUIRED)
+
 # find_package(my_interfaces REQUIRED)
 
 # ---- QLed (replaces include(/usr/local/src/QLed/qled.pri)) ----
@@ -56,6 +58,7 @@ target_link_libraries(InMotoManager PRIVATE
     Qt5::Xml
     rclcpp::rclcpp
     ${std_srvs_TARGETS}
+    ${std_msgs_TARGETS}
     # ${my_interfaces_TARGETS}
 )
 

@@ -15,14 +15,18 @@ InMotoManager::InMotoManager(QWidget *parent)
     ros_kill_process_ = new QProcess(this);
     ros_start_bag_recording_ = new QProcess(this);
     ros_stop_bag_recording_ = new QProcess(this);
-    ros_clear_trajectory_ = new QProcess(this);
 
     connect(ui->on_btn, &QPushButton::clicked, this, &InMotoManager::onStartButtonClicked);
     connect(ui->off_btn, &QPushButton::clicked, this, &InMotoManager::onStopButtonClicked);
 
-    // Led Widget
+    // Power Led Widget
     ui->power_led->setShape(QLed::ledShape::Circle);
     ui->power_led->setColor(QColor("green"));
+
+    // User Proximity Widgets
+    ui->user_proximity_led->setShape(QLed::ledShape::Circle);
+    ui->user_proximity_led->setColor(QColor("green"));
+
 
     // Default state
     ui->exercise_gbox->setEnabled(false);
@@ -31,9 +35,16 @@ InMotoManager::InMotoManager(QWidget *parent)
     node_ = rclcpp::Node::make_shared("inmoto_manager");
 
     // Setup ROS service client
-    client_ =
+    clear_trajectory_client_ =
         node_->create_client<std_srvs::srv::Trigger>("/trajectory_publisher_node/clear_trajectory");
+    // Setup ROS Topic Subscriber
+    user_proximity_subscriber_ = node_->create_subscription<std_msgs::msg::Bool>(
+                "/user_proximity_close", 10, std::bind(&InMotoManager::user_proximity_topic_callback, this, std::placeholders::_1));
 
+    // ROS Signals Thread
+    ros_thread_ = std::thread([this]() {
+        rclcpp::spin(node_);
+    });
 }
 
 void InMotoManager::waitManagingGUI(int msecs, bool disable_gui){
@@ -89,13 +100,17 @@ void InMotoManager::ROS_shutdown(){
 void InMotoManager::ROS_clearTrajectory(){
 
     auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
-    auto future = client_->async_send_request(request);
+    auto future = clear_trajectory_client_->async_send_request(request);
 
     if (rclcpp::spin_until_future_complete(node_, future) !=
         rclcpp::FutureReturnCode::SUCCESS)
     {
-        client_->remove_pending_request(future);
+        clear_trajectory_client_->remove_pending_request(future);
     }
+}
+
+void InMotoManager::user_proximity_topic_callback(std_msgs::msg::Bool msg) {
+    ui->user_proximity_led->setValue(msg.data);
 }
 
 void InMotoManager::onStartButtonClicked() {

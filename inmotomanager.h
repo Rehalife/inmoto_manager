@@ -5,6 +5,8 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/trigger.hpp>
+#include <std_msgs/msg/bool.hpp>
+
 
 namespace Ui {
 class InMotoManager;
@@ -25,6 +27,10 @@ private:
     void ROS_shutdown();
     void ROS_clearTrajectory();
 
+private:
+    // ROS callbacks
+    void user_proximity_topic_callback(std_msgs::msg::Bool msg);
+
 private slots:
     void onStartButtonClicked();
     void onStopButtonClicked();
@@ -32,13 +38,16 @@ private slots:
 
 private:
     Ui::InMotoManager *ui;
+    // Linux processes
     QProcess *ros_start_process_;
     QProcess *ros_kill_process_;
     QProcess *ros_start_bag_recording_;
     QProcess *ros_stop_bag_recording_;
-    QProcess *ros_clear_trajectory_;
 
+    // ROS2 Interaction
     rclcpp::Node::SharedPtr node_;
-    rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_;
+    std::thread ros_thread_;
+    rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr clear_trajectory_client_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr user_proximity_subscriber_;
 
 };
