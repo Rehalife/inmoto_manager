@@ -102,10 +102,15 @@ void InMotoManager::ROS_clearTrajectory(){
     auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
     auto future = clear_trajectory_client_->async_send_request(request);
 
-    if (rclcpp::spin_until_future_complete(node_, future) !=
-        rclcpp::FutureReturnCode::SUCCESS)
+    if (future.wait_for(std::chrono::seconds(2)) == std::future_status::ready)
     {
+        auto response = future.get();
+    }
+    else
+    {
+        // Timeout
         clear_trajectory_client_->remove_pending_request(future);
+        RCLCPP_ERROR(node_->get_logger(), "Service call timed out");
     }
 }
 
