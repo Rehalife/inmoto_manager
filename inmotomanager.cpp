@@ -188,13 +188,13 @@ void InMotoManager::on_start_exercise_btn_clicked()
     ROS_clearTrajectory();
     syncWait(1000);
 
-//    ROS_startRecording();
-//    syncWait(1000);
+    ROS_startRecording();
+    syncWait(1000);
 
 }
 
 void InMotoManager::on_stop_exercise_btn_clicked()
 {
-//    ROS_stopRecording();
-//    syncWait(1000);
+    ROS_stopRecording();
+    syncWait(1000);
 }
