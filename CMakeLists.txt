@@ -26,6 +26,8 @@ list(APPEND CMAKE_PREFIX_PATH /opt/ros/${ROS_DISTRO})
 find_package(rclcpp REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(inmoto_ros REQUIRED)
+
 
 # find_package(my_interfaces REQUIRED)
 
@@ -59,6 +61,7 @@ target_link_libraries(InMotoManager PRIVATE
     rclcpp::rclcpp
     ${std_srvs_TARGETS}
     ${std_msgs_TARGETS}
+    ${inmoto_ros_TARGETS}
     # ${my_interfaces_TARGETS}
 )
 

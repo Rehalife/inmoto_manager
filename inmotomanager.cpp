@@ -13,9 +13,8 @@ InMotoManager::InMotoManager(QWidget *parent)
     // ROS2 container process
     ros_start_process_ = new QProcess(this);
     ros_kill_process_ = new QProcess(this);
-    ros_start_bag_recording_ = new QProcess(this);
-    ros_stop_bag_recording_ = new QProcess(this);
 
+    // UI Connections
     connect(ui->on_btn, &QPushButton::clicked, this, &InMotoManager::onStartButtonClicked);
     connect(ui->off_btn, &QPushButton::clicked, this, &InMotoManager::onStopButtonClicked);
 
@@ -37,9 +36,14 @@ InMotoManager::InMotoManager(QWidget *parent)
     // Setup ROS node
     node_ = rclcpp::Node::make_shared("inmoto_manager");
 
-    // Setup ROS service client
+    // Setup ROS service clients
     clear_trajectory_client_ =
         node_->create_client<std_srvs::srv::Trigger>("/trajectory_publisher_node/clear_trajectory");
+    start_recording_client_ =
+            node_->create_client<inmoto_ros::srv::StartRecording>("/start_recording");
+    stop_recording_client_ =
+            node_->create_client<std_srvs::srv::Trigger>("/stop_recording");
+
     // Setup ROS Topic Subscriber
     user_proximity_subscriber_ = node_->create_subscription<std_msgs::msg::Bool>(
                 "/user_proximity_close", 10, std::bind(&InMotoManager::user_proximity_topic_callback, this, std::placeholders::_1));
@@ -50,7 +54,15 @@ InMotoManager::InMotoManager(QWidget *parent)
     });
 }
 
-void InMotoManager::waitManagingGUI(int msecs, bool disable_gui){
+void InMotoManager::syncWait(int msec) {
+    QEventLoop loop;
+    // Quando il timer scatta, dice al loop di uscire
+    QTimer::singleShot(msec, &loop, &QEventLoop::quit);
+    // Avvia un sotto-loop di eventi: il codice si ferma qui, ma la GUI e i thread Qt continuano a girare!
+    loop.exec();
+}
+
+void InMotoManager::asyncWaitManagingGUI(int msecs, bool disable_gui){
     if(disable_gui){
         this->setEnabled(false);
     }
@@ -64,6 +76,16 @@ void InMotoManager::waitManagingGUI(int msecs, bool disable_gui){
 InMotoManager::~InMotoManager()
 {
     onStopButtonClicked(); // Turns off all processes if the user closes the app 'InMotoManager'
+
+    // Spegne ROS in modo pulito prima di distruggere il thread
+    if(rclcpp::ok()){
+     rclcpp::shutdown();
+    }
+
+    if(ros_thread_.joinable()){
+     ros_thread_.join();
+    }
+
     delete ui; // Release GUI memory
 }
 
@@ -103,18 +125,20 @@ void InMotoManager::ROS_shutdown(){
 void InMotoManager::ROS_clearTrajectory(){
 
     auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
-    auto future = clear_trajectory_client_->async_send_request(request);
+    callRosService(clear_trajectory_client_, request);
+}
 
-    if (future.wait_for(std::chrono::seconds(2)) == std::future_status::ready)
-    {
-        auto response = future.get();
-    }
-    else
-    {
-        // Timeout
-        clear_trajectory_client_->remove_pending_request(future);
-        RCLCPP_ERROR(node_->get_logger(), "Service call timed out");
-    }
+void InMotoManager::ROS_startRecording(){
+
+    auto request = std::make_shared<inmoto_ros::srv::StartRecording::Request>();
+    request->name = "esercizio";
+    callRosService(start_recording_client_, request);
+}
+
+void InMotoManager::ROS_stopRecording(){
+
+    auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
+    callRosService(stop_recording_client_, request);
 }
 
 void InMotoManager::user_proximity_topic_callback(std_msgs::msg::Bool msg) {
@@ -132,7 +156,7 @@ void InMotoManager::onStartButtonClicked() {
     ROS_startup();
 
     // Wait ROS2 starts completely..
-    waitManagingGUI(5000, true);
+    asyncWaitManagingGUI(5000, true);
 
     // Turn on power led
     ui->power_led->setValue(true);
@@ -147,7 +171,7 @@ void InMotoManager::onStopButtonClicked() {
     ROS_shutdown();
 
     // Wait ROS2 shuts down completely..
-    waitManagingGUI(2000, true);
+    asyncWaitManagingGUI(2000, true);
 
     // Turn off power led
     ui->power_led->setValue(false);
@@ -162,9 +186,15 @@ void InMotoManager::onStopButtonClicked() {
 void InMotoManager::on_start_exercise_btn_clicked()
 {
     ROS_clearTrajectory();
+    syncWait(1000);
 
-    // Wait trajectory is cleared..
-    waitManagingGUI(1000, true);
+//    ROS_startRecording();
+//    syncWait(1000);
 
+}
 
+void InMotoManager::on_stop_exercise_btn_clicked()
+{
+//    ROS_stopRecording();
+//    syncWait(1000);
 }
