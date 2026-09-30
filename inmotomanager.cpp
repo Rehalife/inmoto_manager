@@ -26,10 +26,13 @@ InMotoManager::InMotoManager(QWidget *parent)
     // User Proximity Widgets
     ui->user_proximity_led->setShape(QLed::ledShape::Circle);
     ui->user_proximity_led->setColor(QColor("green"));
-
+    ui->user_proximity_led->setOnColor(QColor("green"));
+    ui->user_proximity_led->setOffColor(QColor("red"));
 
     // Default state
     ui->exercise_gbox->setEnabled(false);
+    ui->user_proximity_gbox->setEnabled(false);
+
 
     // Setup ROS node
     node_ = rclcpp::Node::make_shared("inmoto_manager");
@@ -116,6 +119,12 @@ void InMotoManager::ROS_clearTrajectory(){
 
 void InMotoManager::user_proximity_topic_callback(std_msgs::msg::Bool msg) {
     ui->user_proximity_led->setValue(msg.data);
+
+    if(msg.data){
+        ui->user_proximity_label->setText("USER DETECTED");
+    }else {
+        ui->user_proximity_label->setText("! USER NOT DETECTED !");
+    }
 }
 
 void InMotoManager::onStartButtonClicked() {
@@ -130,6 +139,7 @@ void InMotoManager::onStartButtonClicked() {
 
     // Enable features
     ui->exercise_gbox->setEnabled(true);
+    ui->user_proximity_gbox->setEnabled(true);
 }
 
 void InMotoManager::onStopButtonClicked() {
@@ -144,6 +154,8 @@ void InMotoManager::onStopButtonClicked() {
 
     // Disable features
     ui->exercise_gbox->setEnabled(false);
+    ui->user_proximity_gbox->setEnabled(false);
+
 }
 
 
