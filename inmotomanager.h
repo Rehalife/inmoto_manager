@@ -50,6 +50,8 @@ private:
     void ROS_startRecording();
     void ROS_stopRecording();
 
+protected:
+    void closeEvent(QCloseEvent *event) override;
 
 private:
     // ROS callbacks
@@ -59,7 +61,6 @@ private slots:
     void onStartButtonClicked();
     void onStopButtonClicked();
     void on_start_exercise_btn_clicked();
-
     void on_stop_exercise_btn_clicked();
 
 private:
@@ -75,5 +76,9 @@ private:
     rclcpp::Client<inmoto_ros::srv::StartRecording>::SharedPtr start_recording_client_;
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr stop_recording_client_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr user_proximity_subscriber_;
+
+    // Stato
+    bool ros_in_esecuzione_ = false;
+    bool registrazione_esercizio_in_corso_ = false;
 
 };

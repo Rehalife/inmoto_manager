@@ -1,6 +1,9 @@
 #include "inmotomanager.h"
 #include "ui_inmotomanager.h"
+
 #include <QDebug>
+#include <QMessageBox>
+#include <QCloseEvent>
 
 namespace fs = std::filesystem;
 
@@ -31,7 +34,8 @@ InMotoManager::InMotoManager(QWidget *parent)
     // Default state
     ui->exercise_gbox->setEnabled(false);
     ui->user_proximity_gbox->setEnabled(false);
-
+    ui->off_btn->setEnabled(false);
+    ui->stop_exercise_btn->setEnabled(false);
 
     // Setup ROS node
     node_ = rclcpp::Node::make_shared("inmoto_manager");
@@ -130,8 +134,26 @@ void InMotoManager::ROS_clearTrajectory(){
 
 void InMotoManager::ROS_startRecording(){
 
+    bool ok{};
+    QString text{};
+
+    while (text.isEmpty()){
+
+        text = QInputDialog::getText(this, tr("Inizio registrazione"),
+                                             tr("Nome registrazione:"), QLineEdit::Normal,
+                                             "", &ok);
+        if (!ok){
+            QMessageBox::warning(this, "Registrazione annullata", "Operazione di registrazione annullata!");
+            return;
+        }
+
+        if (text.isEmpty()){
+            QMessageBox::warning(this, "Informazioni mancanti", "Definire il nome della registrazione!");
+        }
+    }
+
     auto request = std::make_shared<inmoto_ros::srv::StartRecording::Request>();
-    request->name = "esercizio";
+    request->name = text.toStdString();
     callRosService(start_recording_client_, request);
 }
 
@@ -151,7 +173,31 @@ void InMotoManager::user_proximity_topic_callback(std_msgs::msg::Bool msg) {
     }
 }
 
+void InMotoManager::closeEvent(QCloseEvent *event) {
+
+    bool conditions_met = !ros_in_esecuzione_;
+
+    if (!conditions_met) {
+
+        QMessageBox::StandardButton answer;
+        answer = QMessageBox::warning(this, "Conferma chiusura",
+                                       "Prima di chiudere l'applicazione è necessario spegnere il sistema");
+
+        event->ignore();
+        return;
+    }
+
+    event->accept();
+}
+
 void InMotoManager::onStartButtonClicked() {
+
+    // Update GUI and state
+    ui->exercise_gbox->setEnabled(true);
+    ui->user_proximity_gbox->setEnabled(true);
+    ui->off_btn->setEnabled(true);
+    ui->on_btn->setEnabled(false);
+    ros_in_esecuzione_ = true;
 
     ROS_startup();
 
@@ -160,13 +206,14 @@ void InMotoManager::onStartButtonClicked() {
 
     // Turn on power led
     ui->power_led->setValue(true);
-
-    // Enable features
-    ui->exercise_gbox->setEnabled(true);
-    ui->user_proximity_gbox->setEnabled(true);
 }
 
 void InMotoManager::onStopButtonClicked() {
+
+    if(registrazione_esercizio_in_corso_){
+        QMessageBox::warning(this, "Chiusura sistema annullata", "Registrazione in corso: prima di spegnere il sistema bisogna fermare la registrazione.");
+        return;
+    }
 
     ROS_shutdown();
 
@@ -179,22 +226,35 @@ void InMotoManager::onStopButtonClicked() {
     // Disable features
     ui->exercise_gbox->setEnabled(false);
     ui->user_proximity_gbox->setEnabled(false);
+    ui->off_btn->setEnabled(false);
+    ui->on_btn->setEnabled(true);
+
+    ros_in_esecuzione_ = false;
 
 }
 
 
 void InMotoManager::on_start_exercise_btn_clicked()
 {
+    // Update GUI and state
+    ui->stop_exercise_btn->setEnabled(true);
+    ui->start_exercise_btn->setEnabled(false);
+    registrazione_esercizio_in_corso_ = true;
+
     ROS_clearTrajectory();
     syncWait(1000);
 
     ROS_startRecording();
     syncWait(1000);
-
 }
 
 void InMotoManager::on_stop_exercise_btn_clicked()
 {
     ROS_stopRecording();
     syncWait(1000);
+
+    ui->stop_exercise_btn->setEnabled(false);
+    ui->start_exercise_btn->setEnabled(true);
+
+    registrazione_esercizio_in_corso_ = false;
 }
