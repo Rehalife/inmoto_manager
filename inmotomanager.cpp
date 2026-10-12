@@ -10,20 +10,27 @@ namespace fs = std::filesystem;
 InMotoManager::InMotoManager(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::InMotoManager)
+    , recording_folder_("RECORDINGS")
 {
     ui->setupUi(this);
+
+    // Stay Always on TOP
+    auto flags = this->windowFlags();
+    this->setWindowFlags(flags|Qt::WindowStaysOnTopHint);
 
     // ROS2 container process
     ros_start_process_ = new QProcess(this);
     ros_kill_process_ = new QProcess(this);
 
     // UI Connections
-    connect(ui->on_btn, &QPushButton::clicked, this, &InMotoManager::onStartButtonClicked);
-    connect(ui->off_btn, &QPushButton::clicked, this, &InMotoManager::onStopButtonClicked);
+    connect(ui->deambulatore_on_btn, &QPushButton::clicked, this, &InMotoManager::on_deambulatore_on_btn_clicked);
+    connect(ui->deambulatore_off_btn, &QPushButton::clicked, this, &InMotoManager::on_deambulatore_off_btn_clicked);
 
     // Power Led Widget
     ui->power_led->setShape(QLed::ledShape::Circle);
     ui->power_led->setColor(QColor("green"));
+    ui->visualizer_power_led->setShape(QLed::ledShape::Circle);
+    ui->visualizer_power_led->setColor(QColor("green"));
 
     // User Proximity Widgets
     ui->user_proximity_led->setShape(QLed::ledShape::Circle);
@@ -32,10 +39,11 @@ InMotoManager::InMotoManager(QWidget *parent)
     ui->user_proximity_led->setOffColor(QColor("red"));
 
     // Default state
-    ui->exercise_gbox->setEnabled(false);
+    ui->registrazione_esercizio_gbox->setEnabled(false);
     ui->user_proximity_gbox->setEnabled(false);
-    ui->off_btn->setEnabled(false);
+    ui->deambulatore_off_btn->setEnabled(false);
     ui->stop_exercise_btn->setEnabled(false);
+    ui->stackedWidget->setCurrentIndex(0);
 
     // Setup ROS node
     node_ = rclcpp::Node::make_shared("inmoto_manager");
@@ -79,7 +87,9 @@ void InMotoManager::asyncWaitManagingGUI(int msecs, bool disable_gui){
 
 InMotoManager::~InMotoManager()
 {
-    onStopButtonClicked(); // Turns off all processes if the user closes the app 'InMotoManager'
+    on_deambulatore_off_btn_clicked(); // Turns off all processes if the user closes the app 'InMotoManager'
+
+    //TODO chiamare anche on_visualizer_off_bnt_clicked();
 
     // Spegne ROS in modo pulito prima di distruggere il thread
     if(rclcpp::ok()){
@@ -93,19 +103,33 @@ InMotoManager::~InMotoManager()
     delete ui; // Release GUI memory
 }
 
-void InMotoManager::ROS_startup(){
+void InMotoManager::ROS_full_system_startup(){
 
     if (ros_start_process_->state() != QProcess::NotRunning) {
         qDebug() << "ROS 2 already active!";
         return;
     }
 
-    //ros_process_->setCreateProcessGroup(true); // function non found in our qt system
-
     QString prog = "bash";
     QStringList args;
 
     args << "-c" << "source /opt/ros/humble/setup.bash && source ~/inmoto_ws/install/setup.bash && ros2 launch inmoto_ros main_launch.py";
+
+    qDebug() << "Starting ROS2...";
+    ros_start_process_->start(prog, args);
+}
+
+void InMotoManager::ROS_visual_system_startup(){
+
+    if (ros_start_process_->state() != QProcess::NotRunning) {
+        qDebug() << "ROS 2 already active!";
+        return;
+    }
+
+    QString prog = "bash";
+    QStringList args;
+
+    args << "-c" << "source /opt/ros/humble/setup.bash && source ~/inmoto_ws/install/setup.bash && ros2 launch inmoto_ros visualization_launch.py";
 
     qDebug() << "Starting ROS2...";
     ros_start_process_->start(prog, args);
@@ -135,11 +159,11 @@ void InMotoManager::ROS_clearTrajectory(){
 void InMotoManager::ROS_startRecording(){
 
     bool ok{};
-    QString text{};
+    QString recording_name{};
 
-    while (text.isEmpty()){
+    while (recording_name.isEmpty()){
 
-        text = QInputDialog::getText(this, tr("Inizio registrazione"),
+        recording_name = QInputDialog::getText(this, tr("Inizio registrazione"),
                                              tr("Nome registrazione:"), QLineEdit::Normal,
                                              "", &ok);
         if (!ok){
@@ -147,13 +171,13 @@ void InMotoManager::ROS_startRecording(){
             return;
         }
 
-        if (text.isEmpty()){
+        if (recording_name.isEmpty()){
             QMessageBox::warning(this, "Informazioni mancanti", "Definire il nome della registrazione!");
         }
     }
 
     auto request = std::make_shared<inmoto_ros::srv::StartRecording::Request>();
-    request->name = text.toStdString();
+    request->name = recording_folder_ + "/" + recording_name.toStdString();
     callRosService(start_recording_client_, request);
 }
 
@@ -190,16 +214,35 @@ void InMotoManager::closeEvent(QCloseEvent *event) {
     event->accept();
 }
 
-void InMotoManager::onStartButtonClicked() {
+
+void InMotoManager::on_usa_deambulatore_btn_clicked()
+{
+    ui->stackedWidget->setCurrentIndex(1);
+    ui->deambulatore_off_btn->setEnabled(false);
+
+}
+
+void InMotoManager::on_usa_visualizzatore_btn_clicked()
+{
+    ui->stackedWidget->setCurrentIndex(2);
+    ui->visualizer_off_btn->setEnabled(false);
+    ui->visualize_exercise_gbox->setEnabled(false);
+
+}
+
+void InMotoManager::on_deambulatore_on_btn_clicked() {
 
     // Update GUI and state
-    ui->exercise_gbox->setEnabled(true);
+    ui->usa_visualizzatore_btn->setEnabled(false);
+    ui->usa_deambulatore_btn->setEnabled(false);
+
+    ui->registrazione_esercizio_gbox->setEnabled(true);
     ui->user_proximity_gbox->setEnabled(true);
-    ui->off_btn->setEnabled(true);
-    ui->on_btn->setEnabled(false);
+    ui->deambulatore_off_btn->setEnabled(true);
+    ui->deambulatore_on_btn->setEnabled(false);
     ros_in_esecuzione_ = true;
 
-    ROS_startup();
+    ROS_full_system_startup();
 
     // Wait ROS2 starts completely..
     asyncWaitManagingGUI(5000, true);
@@ -208,7 +251,7 @@ void InMotoManager::onStartButtonClicked() {
     ui->power_led->setValue(true);
 }
 
-void InMotoManager::onStopButtonClicked() {
+void InMotoManager::on_deambulatore_off_btn_clicked() {
 
     if(registrazione_esercizio_in_corso_){
         QMessageBox::warning(this, "Chiusura sistema annullata", "Registrazione in corso: prima di spegnere il sistema bisogna fermare la registrazione.");
@@ -223,11 +266,14 @@ void InMotoManager::onStopButtonClicked() {
     // Turn off power led
     ui->power_led->setValue(false);
 
-    // Disable features
-    ui->exercise_gbox->setEnabled(false);
+    // Update GUI
+    ui->usa_visualizzatore_btn->setEnabled(true);
+    ui->usa_deambulatore_btn->setEnabled(true);
+
+    ui->registrazione_esercizio_gbox->setEnabled(false);
     ui->user_proximity_gbox->setEnabled(false);
-    ui->off_btn->setEnabled(false);
-    ui->on_btn->setEnabled(true);
+    ui->deambulatore_off_btn->setEnabled(false);
+    ui->deambulatore_on_btn->setEnabled(true);
 
     ros_in_esecuzione_ = false;
 
@@ -257,4 +303,41 @@ void InMotoManager::on_stop_exercise_btn_clicked()
     ui->start_exercise_btn->setEnabled(true);
 
     registrazione_esercizio_in_corso_ = false;
+}
+
+void InMotoManager::on_visualizer_on_btn_clicked()
+{
+    // Update GUI and state
+    ui->usa_visualizzatore_btn->setEnabled(false);
+    ui->usa_deambulatore_btn->setEnabled(false);
+    ui->visualizer_on_btn->setEnabled(false);
+    ui->visualizer_off_btn->setEnabled(true);
+    ui->visualize_exercise_gbox->setEnabled(true);
+
+    ROS_visual_system_startup();
+
+    // Wait ROS2 starts completely..
+    asyncWaitManagingGUI(2500, true);
+
+    // Turn on power led
+    ui->visualizer_power_led->setValue(true);
+}
+
+void InMotoManager::on_visualizer_off_btn_clicked()
+{
+    ROS_shutdown();
+
+    // Wait ROS2 shuts down completely..
+    asyncWaitManagingGUI(2000, true);
+
+    // Turn off power led
+    ui->visualizer_power_led->setValue(false);
+
+    // Update GUI and state
+    ui->usa_visualizzatore_btn->setEnabled(true);
+    ui->usa_deambulatore_btn->setEnabled(true);
+    ui->visualizer_on_btn->setEnabled(true);
+    ui->visualizer_off_btn->setEnabled(false);
+    ui->visualize_exercise_gbox->setEnabled(false);
+
 }

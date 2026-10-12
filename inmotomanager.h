@@ -44,7 +44,8 @@ private:
 
 private:
     // ROS calls
-    void ROS_startup();
+    void ROS_full_system_startup();
+    void ROS_visual_system_startup();
     void ROS_shutdown();
     void ROS_clearTrajectory();
     void ROS_startRecording();
@@ -58,10 +59,14 @@ private:
     void user_proximity_topic_callback(std_msgs::msg::Bool msg);
 
 private slots:
-    void onStartButtonClicked();
-    void onStopButtonClicked();
+    void on_usa_deambulatore_btn_clicked();
+    void on_usa_visualizzatore_btn_clicked();
+    void on_deambulatore_on_btn_clicked();
+    void on_deambulatore_off_btn_clicked();
     void on_start_exercise_btn_clicked();
     void on_stop_exercise_btn_clicked();
+    void on_visualizer_on_btn_clicked();
+    void on_visualizer_off_btn_clicked();
 
 private:
     Ui::InMotoManager *ui;
@@ -80,5 +85,8 @@ private:
     // Stato
     bool ros_in_esecuzione_ = false;
     bool registrazione_esercizio_in_corso_ = false;
+
+    // Cartella registrazioni
+    std::string recording_folder_;
 
 };
